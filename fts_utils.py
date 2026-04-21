@@ -8,6 +8,7 @@ import copy
 import so_coupling_optics_TR_geometry as geo
 import diffraction as diff
 from tqdm import tqdm
+import sys
 import time
 from multiprocessing import Pool
 # from so_coupling_optics_TR_geometry import optical_system, dm, ell_3, ell_4, ell_5, ell_6
@@ -80,6 +81,11 @@ def _trace_at_pos(pos, prefts, separate_by_path):
     )
 
 
+def _trace_at_pos_star(args): return _trace_at_pos(*args)
+def _power_at_pos_star(args): return _power_at_pos(*args)
+def _power_and_map_at_pos_star(args): return _power_and_map_at_pos(*args)
+
+
 def scan_fts(starting_rays, fts_throw, fts_step, separate_by_path=False, return_path_ids=False, debug=False, n_workers=None):
     dm_positions = np.arange(-fts_throw, fts_throw + fts_step, fts_step)
     # trace rays through pre-FTS once. Then iterate with those as the starting rays
@@ -93,7 +99,7 @@ def scan_fts(starting_rays, fts_throw, fts_step, separate_by_path=False, return_
 
     args = [(pos, prefts, separate_by_path) for pos in dm_positions]
     with Pool(processes=n_workers) as pool:
-        outputs = list(tqdm(pool.starmap(_trace_at_pos, args), total=len(dm_positions), desc="Scanning FTS"))
+        outputs = list(tqdm(pool.imap(_trace_at_pos_star, args), total=len(dm_positions), desc="Scanning FTS", file=sys.stderr, dynamic_ncols=True))
 
     if not separate_by_path:
         return _pad_rays_to_rectangular(outputs)
@@ -115,19 +121,28 @@ def generate_interferogram(final_rays, detector, freqs, fts_throw, fts_step, n_w
     args = [(pos, detector, freqs) for pos in final_rays]
     with Pool(processes=n_workers) as pool:
         if return_maps:
-            results = list(tqdm(pool.starmap(_power_and_map_at_pos, args), total=len(dm_positions), desc="Generating interferogram"))
+            results = list(tqdm(pool.imap(_power_and_map_at_pos_star, args), total=len(dm_positions), desc="Generating interferogram", file=sys.stderr, dynamic_ncols=True))
             power_values, source_maps = zip(*results)
             return np.array(power_values, dtype=float), dm_positions, np.array(source_maps, dtype=float)
-        power_values = list(tqdm(pool.starmap(_power_at_pos, args), total=len(dm_positions), desc="Generating interferogram"))
+        power_values = list(tqdm(pool.imap(_power_at_pos_star, args), total=len(dm_positions), desc="Generating interferogram", file=sys.stderr, dynamic_ncols=True))
     return np.array(power_values, dtype=float), dm_positions
 
 '''Utilities for generating spectra from interferograms.'''
 
-def generate_spectrum(interferogram, fts_step_size):
+def generate_spectrum(interferogram, fts_step_size, normalize=True, normalize_cutoff=None, return_cutoff = False):
     # Fourier transform interferogram
     windowed_interferogram = np.hanning(int(np.shape(interferogram)[
         0])) * interferogram
     S = np.fft.rfft(windowed_interferogram) # real-valued FFT
     fft = np.abs(S)
     fft_freqs = np.fft.rfftfreq(len(interferogram), d=(4 * fts_step_size)/c)
+    if normalize:
+        if normalize_cutoff is not None:
+            mask = fft_freqs >= normalize_cutoff
+            norm_val = np.max(fft[mask]) if np.any(mask) else np.max(fft)
+        else:
+            norm_val = np.max(fft)
+        fft /= norm_val
+    if return_cutoff and normalize_cutoff is not None:
+        return fft_freqs[mask], fft[mask] # type: ignore
     return fft_freqs, fft

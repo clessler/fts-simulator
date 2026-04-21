@@ -55,7 +55,7 @@ class Detector(rt._PoseMixin):
 		Xg, Yg, Zg = pts[:, :, 0], pts[:, :, 1], pts[:, :, 2]
 		return Xg, Yg, Zg
 	
-	def intensity_map(self, input_rays, freqs, plot=False, fig=None, method = 'huygens'):
+	def intensity_map(self, input_rays, freqs, plot=False, fig=None, method = 'huygens', ray_chunk_size=32):
 		# propagates rays at the aperture plane to a 2D intensity pattern at the detector plane, using the specified method
 
 		# create array for intensity values at each grid point
@@ -74,20 +74,28 @@ class Detector(rt._PoseMixin):
 		ex0 = amps * np.cos(thetas)  # (N_rays,)
 		ey0 = amps * np.sin(thetas)  # (N_rays,)
 
-		# Distances from every ray to every grid point: (Ny, Nx, N_rays)
-		grid_pts  = np.stack([Xg, Yg, Zg], axis=-1)  # (Ny, Nx, 3)
-		distances = np.linalg.norm(
-			grid_pts[:, :, None, :] - starting_pts[None, None, :, :], axis=-1
-		)
-		total_distances = distances + ray_dists[None, None, :]  # (Ny, Nx, N_rays)
+		# Accumulate field sums in chunks to cap peak memory at O(Ny * Nx * ray_chunk_size)
+		# rather than O(Ny * Nx * N_rays) for the full broadcast.
+		grid_pts = np.stack([Xg, Yg, Zg], axis=-1)  # (Ny, Nx, 3)
+		n_rays = len(starting_pts)
 
 		for freq in freqs:
 			wavelength = c / freq
-			phases = np.exp(1j * 2 * np.pi * total_distances / wavelength)  # (Ny, Nx, N_rays)
-			ex = (ex0[None, None, :] / distances) * phases
-			ey = (ey0[None, None, :] / distances) * phases
-			intensities += (np.abs(np.nansum(ex, axis=-1))**2
-			              + np.abs(np.nansum(ey, axis=-1))**2)
+			Ex_sum = np.zeros(Xg.shape, dtype=complex)
+			Ey_sum = np.zeros(Xg.shape, dtype=complex)
+			for start in range(0, n_rays, ray_chunk_size):
+				end = start + ray_chunk_size
+				sp_c  = starting_pts[start:end]   # (C, 3)
+				rd_c  = ray_dists[start:end]       # (C,)
+				ex_c  = ex0[start:end]             # (C,)
+				ey_c  = ey0[start:end]             # (C,)
+				dist_c = np.linalg.norm(
+					grid_pts[:, :, None, :] - sp_c[None, None, :, :], axis=-1
+				)                                  # (Ny, Nx, C)
+				phases_c = np.exp(1j * 2 * np.pi * (dist_c + rd_c[None, None, :]) / wavelength)
+				Ex_sum += np.nansum((ex_c[None, None, :] / dist_c) * phases_c, axis=-1)
+				Ey_sum += np.nansum((ey_c[None, None, :] / dist_c) * phases_c, axis=-1)
+			intensities += np.abs(Ex_sum)**2 + np.abs(Ey_sum)**2
 				
 		if (plot):
 			if fig is None:
