@@ -62,13 +62,13 @@ def get_optical_system_with_dm_pos(pos):
     }
 
 
-def _power_at_pos(pos_rays, detector, freqs):
-    source_map, _, _ = detector.intensity_map(pos_rays, freqs, plot=False)
+def _power_at_pos(pos_rays, detector, freqs, ray_chunk_size=32):
+    source_map, _, _ = detector.intensity_map(pos_rays, freqs, plot=False, ray_chunk_size=ray_chunk_size)
     return float(np.sum(source_map))
 
 
-def _power_and_map_at_pos(pos_rays, detector, freqs):
-    source_map, _, _ = detector.intensity_map(pos_rays, freqs, plot=False)
+def _power_and_map_at_pos(pos_rays, detector, freqs, ray_chunk_size=32):
+    source_map, _, _ = detector.intensity_map(pos_rays, freqs, plot=False, ray_chunk_size=ray_chunk_size)
     return float(np.sum(source_map)), source_map
 
 
@@ -116,9 +116,9 @@ def scan_fts(starting_rays, fts_throw, fts_step, separate_by_path=False, return_
     )
     return (stacked, np.array(path_ids, dtype=object)) if return_path_ids else stacked
 
-def generate_interferogram(final_rays, detector, freqs, fts_throw, fts_step, n_workers=None, return_maps=False):
+def generate_interferogram(final_rays, detector, freqs, fts_throw, fts_step, n_workers=None, return_maps=False, ray_chunk_size=32):
     dm_positions = np.arange(-fts_throw, fts_throw + fts_step, fts_step)
-    args = [(pos, detector, freqs) for pos in final_rays]
+    args = [(pos, detector, freqs, ray_chunk_size) for pos in final_rays]
     with Pool(processes=n_workers) as pool:
         if return_maps:
             results = list(tqdm(pool.imap(_power_and_map_at_pos_star, args), total=len(dm_positions), desc="Generating interferogram", file=sys.stderr, dynamic_ncols=True))

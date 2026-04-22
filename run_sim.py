@@ -1,5 +1,9 @@
 '''
 Script to to simulate the FTS scanning & produce an interferogram for 1 detector position.
+
+If num_rays is not specified, defaults to 500 rays.
+Run like so (for 1000 rays): python run_sim.py --num-rays 1000
+
 Inputs: 
 - FTS parameters (e.g. scan speed, sampling rate, etc.)
 - Detector position (e.g. x, y coordinates)
@@ -13,6 +17,7 @@ Outputs:
 - Array of intensity maps at the source for each mirror position (optional)
 '''
 # imports
+import argparse
 import time
 import os
 import pickle
@@ -22,9 +27,15 @@ import fts_utils
 import so_coupling_optics_TR_geometry as geo
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Run FTS simulation for a single detector position.')
+    parser.add_argument('--num-rays', type=int, default=500, help='Number of rays to use in the simulation (default: 500)')
+    args = parser.parse_args()
+    num_rays = args.num_rays
+
     # input beam file here
     # note: might want to auto-configure so that different beam files get used depending on my command-line argument (e.g. which frequency band I'm simulating for)
-    beam_file = '/Users/clessler/Documents/grad_research/instrument_model/instrument_hardware/simulated_beam/simulated_feedhorn_beams/MF/150_GHz_weighted.txt'
+    # insert your beam file path here:
+    beam_file = '/home/clessler/instrument_model/instrument_hardware/simulated_beam/simulated_feedhorn_beams/MF/150_GHz_weighted.txt'
     beam_data = np.loadtxt(beam_file)
 
     # set starting position & beam angle bounds for ray generation
@@ -37,9 +48,6 @@ if __name__ == '__main__':
 
     # input frequency or array of frequencies here
     freqs = np.array([150e9])  # Hz, example frequency for simulation (150 GHz)
-
-    # set number of rays to use in the simulation
-    num_rays = 500
 
     t0 = time.time()
 
