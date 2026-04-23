@@ -5,6 +5,7 @@ per frequency to avoid redundant computation. Outputs saved to
 sim_outputs/by_freq/500r/<freq_GHz>GHz.npz.
 '''
 import time
+import argparse
 import os
 import pickle
 import numpy as np
@@ -13,7 +14,13 @@ import fts_utils
 import so_coupling_optics_TR_geometry as geo
 
 if __name__ == '__main__':
-    beam_file = '/Users/clessler/Documents/grad_research/instrument_model/instrument_hardware/simulated_beam/simulated_feedhorn_beams/MF/150_GHz_weighted.txt'
+
+    parser = argparse.ArgumentParser(description='Run FTS simulation for a single detector position.')
+    parser.add_argument('--num-rays', type=int, default=500, help='Number of rays to use in the simulation (default: 500)')
+    args = parser.parse_args()
+    num_rays = args.num_rays
+
+    beam_file = '/home/clessler/instrument_model/instrument_hardware/simulated_beam/simulated_feedhorn_beams/MF/150_GHz_weighted.txt'
     beam_data = np.loadtxt(beam_file)
 
     xpos, ypos = -53.947736, 1.34448473
@@ -22,10 +29,9 @@ if __name__ == '__main__':
     FTS_throw = 20
     FTS_step = 0.1
 
-    num_rays = 500
     freqs = np.linspace(128e9, 168e9, 10)
 
-    out_dir = 'sim_outputs/by_freq/500r'
+    out_dir = f'sim_outputs/by_freq/{num_rays}r'
     os.makedirs(out_dir, exist_ok=True)
 
     t0 = time.time()
