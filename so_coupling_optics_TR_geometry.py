@@ -78,7 +78,11 @@ wg_3 = rt.WireGrid(pol_axis = np.pi/2, origin = (124.11, 0,0), diam = 115.57, gx
 
 wg_4 = rt.WireGrid(pol_axis = np.pi/4, origin = (246.11, 0,0), diam = 115.57, gx_local = (1,0,0), gy_local = (0,0,-1), gz_local = (0,1,0))
 
-dm = rt.DihedralMirror(m=1, b=0.5, diam=124, origin= (0,0,0), gx_local = (1,0,0), gy_local = (0,0,-1), gz_local = (0,1,0))
+# old geometry
+# dm = rt.DihedralMirror(m=1, b=0.5, diam=124, origin= (0,0,0), gx_local = (1,0,0), gy_local = (0,0,-1), gz_local = (0,1,0))
+
+# flat mirror (SO FTS turns out to have a flat mirror rather than a dihedral one)
+central_mirror = rt.FlatMirror(diam=124, origin=(0,0,0), gx_local=(1,0,0), gy_local=(0,0,-1), gz_local=(0,1,0))
 
 # considered modelling the FTS as a non-sequential system; but this will most likely be slower
 # FTS_system = rt.NSSystem([wg_1, ell_1, ell_2])
@@ -89,7 +93,7 @@ dm = rt.DihedralMirror(m=1, b=0.5, diam=124, origin= (0,0,0), gx_local = (1,0,0)
 # origin in local coords: -238.577, 0, 368.267
 iris = rt.FocalPlane(origin=(310.981, 309.566, 0), diam=76.2, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0))
 
-'''Evaluation plane for including diffraction'''
+'''Evaluation plane for plotting the diffraction pattern at the iris (rather than source) plane'''
 eval_plane = rt.FocalPlane(origin = (251.836, 35.884, 0.0), diam = 100, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0))
 
 '''Full system with allowed paths through FTS'''
@@ -111,6 +115,7 @@ allowed_branch_sequences = [
     # ("wg_1:R", "ell_2", "wg_2:R", "ell_4", "wg_3:R", "ell_8", "wg_4:T", "iris"),
 ]
 
+# main optical system for analysis
 optical_system = {
     "entry": "pre_fts",
     "allowed_branch_sequences": allowed_branch_sequences,
@@ -142,8 +147,8 @@ optical_system = {
             "next": {},
         },
 
-        "ell_3": {"element": [ell_3, dm, ell_5], "next": {"default": "wg_3"}}, 
-        "ell_4": {"element": [ell_4, dm, ell_6], "next": {"default": "wg_3"}}, 
+        "ell_3": {"element": [ell_3, central_mirror, ell_5], "next": {"default": "wg_3"}}, 
+        "ell_4": {"element": [ell_4, central_mirror, ell_6], "next": {"default": "wg_3"}}, 
         "wg_3": {"element": wg_3, "next": {}},
         "ell_7": {"element": [ell_7], "next": {"default": "wg_4"}},
         "ell_8": {"element": [ell_8], "next": {"default": "wg_4"}},
@@ -157,3 +162,45 @@ source = diff.Detector(origin=(359.266, 533.008, 0), diam=127, gx_local=(0.97743
 
 # iris as a detector object
 iris_detector = diff.Detector(origin=(310.981, 309.566, 0), diam=76.2, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0), resolution=1)
+
+# optical system for producing source maps at the iris plane
+optical_system_to_eval_plane = {
+    "entry": "pre_fts",
+    "allowed_branch_sequences": allowed_branch_sequences,
+    "nodes": {
+        # Optics tube + coupling optics only
+        "pre_fts": {
+            "element": OT+[M1, M2, bs],
+            "next": {"default": "wg_1"},
+        },
+
+        # Wire grid optical node
+        "wg_1": {
+            "element": wg_1,
+            "next": {}, # routing comes from allowed_branch_sequences
+        },
+
+        "ell_1": {
+            "element": [ell_1],
+            "next": {"default": "wg_2"},
+        },
+
+        "ell_2": {
+            "element": [ell_2],
+            "next": {"default": "wg_2"},
+        },
+
+        'wg_2': {
+            "element": wg_2,
+            "next": {},
+        },
+
+        "ell_3": {"element": [ell_3, central_mirror, ell_5], "next": {"default": "wg_3"}}, 
+        "ell_4": {"element": [ell_4, central_mirror, ell_6], "next": {"default": "wg_3"}}, 
+        "wg_3": {"element": wg_3, "next": {}},
+        "ell_7": {"element": [ell_7], "next": {"default": "wg_4"}},
+        "ell_8": {"element": [ell_8], "next": {"default": "wg_4"}},
+        "wg_4": {"element": wg_4, "next": {}},
+        "eval_plane": {"element": [eval_plane], "next": {"default": None}},
+    },
+}
