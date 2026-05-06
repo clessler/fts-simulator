@@ -639,6 +639,11 @@ class FlatMirror(_PoseMixin, _RayOpsMixin):
         y = np.linspace(-self.diam / 2, self.diam / 2, num_points)
         X, Y = np.meshgrid(x, y)
         Z = np.zeros_like(X)
+        outside = np.hypot(X, Y) > (self.diam / 2)
+        X, Y, Z = X.astype(float), Y.astype(float), Z.astype(float)
+        X[outside] = np.nan
+        Y[outside] = np.nan
+        Z[outside] = np.nan
 
         R_l2g = self._rotation_matrix_local_to_global()
         pts = np.stack((X, Y, Z), axis=-1) @ R_l2g.T + self.origin
@@ -1888,49 +1893,101 @@ def _build_path_color_map(path_ids, base_colors=None, color_sequence=None, defau
     return color_map
 
 
-def _plot_paths(fig, ray_paths: Sequence[Optional[list[npt.NDArray]]], ray_color='red', ray_alpha=1.0, ray_width=2, path_ids=None, path_colors=None):
-    seen_path_legend = set()
+def _plot_paths(fig, ray_paths: Sequence[Optional[list[npt.NDArray]]], ray_color='red', ray_alpha=1.0, ray_width=2, path_ids=None, path_colors=None, color_by_ray=False):
+    seen_labels: set = set()
+
+    if color_by_ray:
+        # One trace per unique path label. Within each trace, each ray is
+        # assigned a scalar index; plotly maps these to a colorscale so every
+        # ray gets a distinct color. Hovertext identifies each ray by index.
+        # This keeps trace count at O(n_path_labels) regardless of n_rays.
+        groups: dict = {}  # label -> [xs, ys, zs, color_indices, texts, ray_count]
+        for i, path_points in enumerate(ray_paths):
+            if path_points is None or len(path_points) == 0:
+                continue
+            path_id = None if path_ids is None else path_ids[i]
+            label = f"Path {path_id}" if (path_ids is not None and path_id not in (None, "")) else "Rays"
+            if label not in groups:
+                groups[label] = [[], [], [], [], [], 0]
+            g = groups[label]
+            ray_idx = g[5]
+            g[5] += 1
+            pts = np.array(path_points)
+            g[0] += pts[:, 0].tolist() + [None]
+            g[1] += pts[:, 1].tolist() + [None]
+            g[2] += pts[:, 2].tolist() + [None]
+            g[3] += [ray_idx] * len(pts) + [0]  # 0 at None gap; invisible
+            g[4] += [f"Ray {i}"] * len(pts) + [None]
+
+        for label, (xs, ys, zs, cidxs, texts, count) in groups.items():
+            norm = [c / max(count - 1, 1) for c in cidxs]
+            show_legend = label not in seen_labels
+            seen_labels.add(label)
+            fig.add_trace(go.Scatter3d(
+                x=xs, y=ys, z=zs,
+                mode='lines',
+                line=dict(color=norm, colorscale='Rainbow', width=ray_width),
+                opacity=ray_alpha,
+                name=label,
+                showlegend=show_legend,
+                text=texts,
+                hovertemplate='%{text}<extra></extra>',
+            ))
+        return
+
+    # Default mode: group rays by (color, label) and batch into single traces
+    # with None separators, keeping add_trace calls at O(n_colors).
+    line_groups: dict = {}   # (color, label) -> [x_vals, y_vals, z_vals]
+    marker_groups: dict = {}  # (color, label) -> [xs, ys, zs]
+
     for i, path_points in enumerate(ray_paths):
         if path_points is None or len(path_points) == 0:
             continue
         path_id = None if path_ids is None else path_ids[i]
         this_color = ray_color if path_colors is None else path_colors.get(path_id, path_colors.get("", ray_color))
         if path_ids is not None and path_id not in (None, ""):
-            trace_name = f"Path {path_id}"
-            # Only show legend for the first occurrence of each unique path ID
-            show_legend = trace_name not in seen_path_legend
-            if show_legend:
-                seen_path_legend.add(trace_name)
+            label = f"Path {path_id}"
         else:
-            trace_name = f'Ray {i}' if i == 0 else None
-            show_legend = (i == 0)
+            label = "Rays"
 
         pts = np.array(path_points)
+        key = (this_color, label)
         if pts.shape[0] == 1:
-            fig.add_trace(
-                go.Scatter3d(
-                    x=[pts[0, 0]],
-                    y=[pts[0, 1]],
-                    z=[pts[0, 2]],
-                    mode='markers',
-                    marker=dict(size=3, color=this_color),
-                    name=trace_name,
-                    showlegend=show_legend,
-                )
-            )
+            if key not in marker_groups:
+                marker_groups[key] = [[], [], []]
+            marker_groups[key][0].append(float(pts[0, 0]))
+            marker_groups[key][1].append(float(pts[0, 1]))
+            marker_groups[key][2].append(float(pts[0, 2]))
         else:
-            fig.add_trace(
-                go.Scatter3d(
-                    x=pts[:, 0],
-                    y=pts[:, 1],
-                    z=pts[:, 2],
-                    mode='lines',
-                    line=dict(color=this_color, width=ray_width),
-                    opacity=ray_alpha,
-                    name=trace_name,
-                    showlegend=show_legend,
-                )
-            )
+            if key not in line_groups:
+                line_groups[key] = [[], [], []]
+            xs, ys, zs = line_groups[key]
+            xs += pts[:, 0].tolist() + [None]
+            ys += pts[:, 1].tolist() + [None]
+            zs += pts[:, 2].tolist() + [None]
+
+    for (color, label), (xs, ys, zs) in line_groups.items():
+        show_legend = label not in seen_labels
+        seen_labels.add(label)
+        fig.add_trace(go.Scatter3d(
+            x=xs, y=ys, z=zs,
+            mode='lines',
+            line=dict(color=color, width=ray_width),
+            opacity=ray_alpha,
+            name=label,
+            showlegend=show_legend,
+        ))
+
+    for (color, label), (xs, ys, zs) in marker_groups.items():
+        show_legend = label not in seen_labels
+        seen_labels.add(label)
+        fig.add_trace(go.Scatter3d(
+            x=xs, y=ys, z=zs,
+            mode='markers',
+            marker=dict(size=3, color=color),
+            name=label,
+            showlegend=show_legend,
+        ))
 
 
 def _iter_graph_elements(optical_graph):
@@ -2041,6 +2098,7 @@ def trace_optical_system(
     n_scan=500,
     debug=False,
     return_all=False,
+    return_full_history=False,
     show=True,
     root_finder='newton'
 ):
@@ -2049,7 +2107,7 @@ def trace_optical_system(
     # -----------------------------
     if not (isinstance(optical_elements, dict) and "nodes" in optical_elements):
         rays = starting_rays
-        track_ray_paths = plot or extend_past_last > 0
+        track_ray_paths = plot or extend_past_last > 0 or return_full_history
         ray_paths = [[np.asarray(rays[i][2], dtype=float).copy()] for i in range(len(rays))] if track_ray_paths else None
         output_rays = [rays] if return_all else None
 
@@ -2093,6 +2151,15 @@ def trace_optical_system(
             if show:
                 fig.show(renderer='notebook_connected')
 
+        if return_full_history:
+            result = {
+                "final_rays": rays,
+                "ray_histories": ray_paths,
+                "path_ids": [""] * len(rays),
+            }
+            if return_all:
+                result["element_snapshots"] = output_rays
+            return result
         return output_rays if return_all else rays
 
     # -----------------------------
@@ -2108,7 +2175,7 @@ def trace_optical_system(
         optical_elements.get("allowed_branch_sequences")
     )
 
-    track_ray_paths = plot or extend_past_last > 0
+    track_ray_paths = plot or extend_past_last > 0 or return_full_history
     active = deque()
     for ray in starting_rays:
         initial_points = [np.asarray(ray[2], dtype=float).copy()] if track_ray_paths else None
@@ -2236,6 +2303,19 @@ def trace_optical_system(
         if show:
             fig.show(renderer='notebook_connected')
 
+    if return_full_history:
+        result = {
+            "final_rays": terminal_rays,
+            "ray_histories": terminal_paths,
+            "path_ids": terminal_path_ids,
+            "path_colors": path_color_lookup,
+        }
+        if return_all:
+            rays_by_path = {}
+            for path_id, ray in zip(terminal_path_ids, terminal_rays):
+                rays_by_path.setdefault(path_id, []).append(ray)
+            result["rays_by_path"] = rays_by_path
+        return result
     if return_all:
         rays_by_path = {}
         for path_id, ray in zip(terminal_path_ids, terminal_rays):
@@ -2246,6 +2326,99 @@ def trace_optical_system(
             "path_colors": path_color_lookup,
         }
     return terminal_rays
+
+
+def plot_ray_histories(
+    trace_result,
+    optical_elements=None,
+    fig=None,
+    ray_color='red',
+    ray_alpha=1.0,
+    ray_width=2,
+    color_by_ray=False,
+    color_paths_by_id=False,
+    path_colors=None,
+    path_color_sequence=None,
+    optics_alpha=0.8,
+    show=True,
+):
+    """Plot ray path histories from trace_optical_system output.
+
+    trace_result may be:
+      - A dict returned by trace_optical_system with return_full_history=True
+        (keys: 'ray_histories', optionally 'path_ids', 'path_colors')
+      - A tuple returned by scan_fts with return_full_history=True; the last
+        element is always histories_by_pos and will be flattened automatically
+      - histories_by_pos directly: list[list[list[ndarray]]] (per-position,
+        per-ray, per-point); will be flattened to a flat per-ray list
+      - A flat list of path-point lists: list[list[ndarray shape (3,)]]
+
+    optical_elements may be a graph dict, a list of elements, or a single element.
+    """
+    if isinstance(trace_result, dict):
+        ray_histories = trace_result.get("ray_histories") or []
+        path_ids = trace_result.get("path_ids", None)
+        stored_path_colors = trace_result.get("path_colors", None)
+    elif isinstance(trace_result, tuple):
+        # scan_fts output: last element is always histories_by_pos
+        histories_by_pos = trace_result[-1]
+        ray_histories = [h for pos in histories_by_pos for h in pos]
+        path_ids = None
+        stored_path_colors = None
+    else:
+        # list input: detect whether it's histories_by_pos (list of per-position
+        # history collections) or a flat list of per-ray histories
+        if (len(trace_result) > 0
+                and isinstance(trace_result[0], list)
+                and len(trace_result[0]) > 0
+                and isinstance(trace_result[0][0], list)):
+            # Nested: histories_by_pos → flatten to per-ray
+            ray_histories = [h for pos in trace_result for h in pos]
+        else:
+            ray_histories = trace_result
+        path_ids = None
+        stored_path_colors = None
+
+    if fig is None:
+        fig = go.Figure()
+
+    if optical_elements is not None:
+        if isinstance(optical_elements, dict) and "nodes" in optical_elements:
+            seen = set()
+            for element in _iter_graph_elements(optical_elements):
+                if id(element) in seen:
+                    continue
+                seen.add(id(element))
+                fig, _ = element.plot(fig=fig, opacity=optics_alpha)
+        else:
+            elements = optical_elements if isinstance(optical_elements, (list, tuple)) else [optical_elements]
+            for element in elements:
+                fig, _ = element.plot(fig=fig, opacity=optics_alpha)
+
+    path_color_lookup = None
+    if color_paths_by_id and path_ids is not None:
+        path_color_lookup = stored_path_colors if stored_path_colors is not None else _build_path_color_map(
+            path_ids,
+            base_colors=path_colors,
+            color_sequence=path_color_sequence,
+            default_color=ray_color,
+        )
+
+    _plot_paths(
+        fig,
+        ray_histories,
+        ray_color=ray_color,
+        ray_alpha=ray_alpha,
+        ray_width=ray_width,
+        path_ids=(path_ids if color_paths_by_id else None),
+        path_colors=path_color_lookup,
+        color_by_ray=color_by_ray,
+    )
+    fig.update_layout(scene=dict(xaxis_title='X (mm)', yaxis_title='Y (mm)', zaxis_title='Z (mm)'))
+    if show:
+        fig.show(renderer='notebook_connected')
+    return fig
+
 
 # function to fit a focal plane to a bundle of rays
 def fit_focal_plane(rays, diam, bounds):
