@@ -64,12 +64,22 @@ def get_optical_system_with_dm_pos(pos):
     }
 
 
+def _has_valid_rays(pos_rays):
+    if len(pos_rays) == 0:
+        return False
+    return not all(np.isnan(r[0]) for r in pos_rays)
+
+
 def _power_at_pos(pos_rays, detector, freqs, ray_chunk_size=32, weights=None):
+    if not _has_valid_rays(pos_rays):
+        return 0.0
     source_map, _, _ = detector.intensity_map(pos_rays, freqs, weights=weights, plot=False, ray_chunk_size=ray_chunk_size)
     return float(np.nansum(source_map))
 
 
 def _power_and_map_at_pos(pos_rays, detector, freqs, ray_chunk_size=32, weights=None):
+    if not _has_valid_rays(pos_rays):
+        return 0.0, None
     source_map, _, _ = detector.intensity_map(pos_rays, freqs, weights=weights, plot=False, ray_chunk_size=ray_chunk_size)
     return float(np.nansum(source_map)), source_map
 
@@ -171,6 +181,8 @@ def generate_interferogram(final_rays, detector, freqs, fts_throw, fts_step, n_w
         if return_maps:
             results = list(tqdm(pool.imap(_power_and_map_at_pos_star, args), total=len(dm_positions), desc="Generating interferogram", file=sys.stderr, dynamic_ncols=True))
             power_values, source_maps = zip(*results)
+            map_shape = next((m.shape for m in source_maps if m is not None), None)
+            source_maps = [m if m is not None else np.zeros(map_shape) for m in source_maps]
             return np.array(power_values, dtype=float), dm_positions, np.array(source_maps, dtype=float)
         power_values = list(tqdm(pool.imap(_power_at_pos_star, args), total=len(dm_positions), desc="Generating interferogram", file=sys.stderr, dynamic_ncols=True))
     return np.array(power_values, dtype=float), dm_positions
