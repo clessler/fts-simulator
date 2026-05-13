@@ -63,6 +63,19 @@ def get_optical_system_with_dm_pos(pos):
         "nodes": nodes,
     }
 
+# Plotting function to produce a full copy of optical system with the central mirror at a specified position
+def get_full_optical_system_with_dm_pos(pos):
+    m_new = copy.copy(_default_geo.central_mirror)  # shallow copy; rotation matrices are unchanged since only origin moves
+    m_new.origin = (0, pos, 0)
+    nodes = dict(_default_geo.optical_system["nodes"])  # shallow copy of node dict
+    # nodes["pre_fts"] = {"element": [], "next": {"default": "wg_1"}}
+    nodes["ell_3"] = {"element": [_default_geo.ell_3, m_new, _default_geo.ell_5], "next": {"default": "wg_3"}}
+    nodes["ell_4"] = {"element": [_default_geo.ell_4, m_new, _default_geo.ell_6], "next": {"default": "wg_3"}}
+    return {
+        "entry": "pre_fts",
+        "allowed_branch_sequences": _default_geo.optical_system["allowed_branch_sequences"],
+        "nodes": nodes,
+    }
 
 def _has_valid_rays(pos_rays):
     if len(pos_rays) == 0:
