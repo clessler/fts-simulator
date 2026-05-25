@@ -97,14 +97,15 @@ class Detector(rt._PoseMixin):
 			cos_chi = np.sum(diff_vecs * rdir_c[None, None, :, :], axis=-1) / dist_c  # (Ny, Nx, C)
 			obliquity = (1.0 + cos_chi) * 0.5
 
-			# include Kirchoff obliquity factor
+			# include Kirchoff obliquity factor & i/lambda scaling
 			inv_dist_ex = ex_c[None, None, :] * obliquity / dist_c  # (Ny, Nx, C)
 			inv_dist_ey = ey_c[None, None, :] * obliquity / dist_c
 			opl_c = dist_c + rd_c[None, None, :]     # (Ny, Nx, C)
 			for i_freq in range(n_freqs):
+				k_factor = -1j / wavelengths[i_freq]
 				phases_c = np.exp(1j * 2 * np.pi * opl_c / wavelengths[i_freq])
-				Ex_sums[i_freq] += np.nansum(inv_dist_ex * phases_c, axis=-1)
-				Ey_sums[i_freq] += np.nansum(inv_dist_ey * phases_c, axis=-1)
+				Ex_sums[i_freq] += np.nansum(k_factor * inv_dist_ex * phases_c, axis=-1)
+				Ey_sums[i_freq] += np.nansum(k_factor * inv_dist_ey * phases_c, axis=-1)
 
 		w = np.asarray(weights) if weights is not None else np.ones(n_freqs)
 		intensities = np.sum(w[:, None, None] * (np.abs(Ex_sums)**2 + np.abs(Ey_sums)**2), axis=0)
