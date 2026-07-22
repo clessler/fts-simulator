@@ -13,7 +13,7 @@ import pickle
 import numpy as np
 import ray_tracing as rt
 
-_GEO_MODULES = {'lat': 'so_coupling_optics_TR_geometry', 'sat': 'SAT_TR_geometry', 'act': 'ACT_FTS_TR_geometry'}
+_GEO_MODULES = {'lat': 'geometry_files.so_coupling_optics_TR_geometry', 'sat': 'geometry_files.SAT_TR_geometry', 'act': 'geometry_files.ACT_FTS_TR_geometry'}
 
 if __name__ == '__main__':
 

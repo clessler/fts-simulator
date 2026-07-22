@@ -82,6 +82,7 @@ wg_4 = rt.WireGrid(pol_axis = np.pi/4, origin = (246.11, 0,0), diam = 115.57, gx
 # dm = rt.DihedralMirror(m=1, b=0.5, diam=124, origin= (0,0,0), gx_local = (1,0,0), gy_local = (0,0,-1), gz_local = (0,1,0))
 
 # flat mirror (SO FTS turns out to have a flat mirror rather than a dihedral one)
+# NOTE: might want to give this a thickness, but this is unlikely to matter
 central_mirror = rt.FlatMirror(diam=124, origin=(0,0,0), gx_local=(1,0,0), gy_local=(0,0,-1), gz_local=(0,1,0))
 
 # considered modelling the FTS as a non-sequential system; but this will most likely be slower
@@ -158,7 +159,8 @@ optical_system = {
 }
 
 # add in source detector object
-source = diff.Detector(origin=(359.266, 533.008, 0), diam=127, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0), resolution = 1)
+# note: changed to 120mm diameter to match the number in Tommy's paper
+source = diff.Detector(origin=(359.266, 533.008, 0), diam=120, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0), resolution = 1)
 
 # iris as a detector object
 iris_detector = diff.Detector(origin=(310.981, 309.566, 0), diam=76.2, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0), resolution=1)

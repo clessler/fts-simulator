@@ -1,19 +1,19 @@
 # Code to simulate the scanning of the FTS.
 # Geometry module is selected via the FTS_GEO_MODULE env var (set before importing this module).
-# Defaults to so_coupling_optics_TR_geometry if the env var is not set.
+# Defaults to geometry_files.so_coupling_optics_TR_geometry if the env var is not set.
 
 import os as _os
 import importlib as _importlib
 import ray_tracing as rt
 import numpy as np
 import copy
-_default_geo = _importlib.import_module(_os.environ.get('FTS_GEO_MODULE', 'so_coupling_optics_TR_geometry'))
+_default_geo = _importlib.import_module(_os.environ.get('FTS_GEO_MODULE', 'geometry_files.so_coupling_optics_TR_geometry'))
 import diffraction as diff
 from tqdm import tqdm
 import sys
 import time
 from multiprocessing import Pool
-# from so_coupling_optics_TR_geometry import optical_system, dm, ell_3, ell_4, ell_5, ell_6
+# from geometry_files.so_coupling_optics_TR_geometry import optical_system, dm, ell_3, ell_4, ell_5, ell_6
 
 c = 2.998e11 # speed of light in mm/s
 
@@ -202,20 +202,26 @@ def generate_interferogram(final_rays, detector, freqs, fts_throw, fts_step, n_w
 
 '''Utilities for generating spectra from interferograms.'''
 
-def generate_spectrum(interferogram, fts_step_size, normalize=True, normalize_cutoff=None, return_cutoff = False):
+# add in source-dependence through exponent alpha
+def generate_spectrum(interferogram, fts_step_size, normalize=True, normalize_cutoff=None, return_cutoff = False, include_source=True, source_alpha=2):
     # Fourier transform interferogram
     windowed_interferogram = np.hanning(int(np.shape(interferogram)[
         0])) * interferogram
     S = np.fft.rfft(windowed_interferogram) # real-valued FFT
     fft = np.abs(S)
     fft_freqs = np.fft.rfftfreq(len(interferogram), d=(4 * fts_step_size)/c)
+
+    mask = (fft_freqs >= normalize_cutoff) if normalize_cutoff is not None else np.ones(len(fft_freqs), dtype=bool)
+
+    if include_source:
+        # apply source-dependence through power law with exponent alpha
+        # keep the highest value in the spectrum the same as before
+        norm_freq = fft_freqs[mask][np.argmax(fft[mask])] if np.any(mask) else fft_freqs[np.argmax(fft)]
+        fft *= fft_freqs**source_alpha/(norm_freq**source_alpha)
+
     if normalize:
-        if normalize_cutoff is not None:
-            mask = fft_freqs >= normalize_cutoff
-            norm_val = np.max(fft[mask]) if np.any(mask) else np.max(fft)
-        else:
-            norm_val = np.max(fft)
+        norm_val = np.max(fft[mask]) if np.any(mask) else np.max(fft)
         fft /= norm_val
     if return_cutoff and normalize_cutoff is not None:
-        return fft_freqs[mask], fft[mask] # type: ignore
+        return fft_freqs[mask], fft[mask]
     return fft_freqs, fft
