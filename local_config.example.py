@@ -46,3 +46,6 @@ weights = None  # for monochromatic input, all rays have equal weight
 # subsample_fac = 2  # sub-sampling to speed this up
 # freqs = passband_freqs[mask][::subsample_fac]
 # weights = passband_weights[mask][::subsample_fac]
+
+# --- frequency sweep (used by run_sim_by_freq.py) ---
+sweep_freqs = np.linspace(128e9, 168e9, 10)
