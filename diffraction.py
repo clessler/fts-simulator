@@ -109,6 +109,8 @@ class Detector(rt._PoseMixin):
 
 		w = np.asarray(weights) if weights is not None else np.ones(n_freqs)
 		intensities = np.sum(w[:, None, None] * (np.abs(Ex_sums)**2 + np.abs(Ey_sums)**2), axis=0)
+
+		# set intensities outside the source aperture to NaN
 		intensities[np.hypot(Xl, Yl) > self.diam / 2] = np.nan
 				
 		if (plot):

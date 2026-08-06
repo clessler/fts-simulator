@@ -113,7 +113,7 @@ def restore_peaks(x, peak_shifts, x_new, y_new, z_interp, input_coeffs=None):
 # def align_peaks_linear(x, y, z):
     # fit a diagonal line in (x,y) to the peak positions
 
-def interp_2d(x, y, z, x_new, y_new, method='spline', peak_track=False, peak_track_method='nonparametric', sigmax=1.0, sigmay=1.0, degree=1, kx=3, ky=3):
+def interp_2d(x, y, z, x_new, y_new, method='spline', peak_track=False, peak_track_method='nonparametric', amplitude_model=None, sigmax=1.0, sigmay=1.0, degree=1, kx=3, ky=3):
     """
     Interpolate z values at new (x_new, y_new) points based on known (x, y, z) data.
 
@@ -129,6 +129,12 @@ def interp_2d(x, y, z, x_new, y_new, method='spline', peak_track=False, peak_tra
     - peak_track: If True, align peaks in y before interpolating and restore them after.
                   Improves accuracy when peaks shift systematically with x.
     - peak_track_method: Method for peak tracking ('nonparametric' or 'linear').
+    - amplitude_model: If 'power_law', decouple row amplitude (peak height) from row shape.
+                  Rows are normalized to unit peak before interpolating, then each interpolated row is renormalized to unit
+                  peak again and rescaled by a power law fit to the known row peaks
+                  (log(amp) = p*log(x) + log(A)), evaluated at x_new. This removes ripple in
+                  peak height that a sparse-in-x exact 2D spline introduces when the row shape
+                  changes across x. Default None.
     - sigmax, sigmay: (gloess only) Gaussian standard deviations in x and y.
     - degree: (gloess only) Degree of the local polynomial fit.
     - kx, ky: (spline only) Spline degrees in x and y (default 3 = cubic).
@@ -136,6 +142,10 @@ def interp_2d(x, y, z, x_new, y_new, method='spline', peak_track=False, peak_tra
     Returns:
     - z_new: 2D array of interpolated z values at (x_new, y_new), shape (len(x_new), len(y_new))
     """
+    if amplitude_model is not None:
+        raw_peak = z.max(axis=1)
+        z = z / raw_peak[:, np.newaxis]
+
     if peak_track:
         z_work, peak_shifts, _, _, linear_coeffs = align_peaks(x, y, z, method=peak_track_method)
     else:
@@ -178,5 +188,14 @@ def interp_2d(x, y, z, x_new, y_new, method='spline', peak_track=False, peak_tra
 
     if peak_track:
         z_new = restore_peaks(x, peak_shifts, x_new, y_new, z_new, input_coeffs=linear_coeffs if peak_track_method=='linear' else None)
+
+    if amplitude_model is not None:
+        if amplitude_model == 'power_law':
+            p, log_A = np.polyfit(np.log(x), np.log(raw_peak), 1)
+            amp_new = np.exp(log_A) * x_new**p
+        else:
+            raise ValueError(f"Unknown amplitude_model '{amplitude_model}'. Choose 'power_law' or None.")
+        row_max = z_new.max(axis=1)
+        z_new = np.where(row_max[:, np.newaxis] > 0, z_new / row_max[:, np.newaxis], 0.0) * amp_new[:, np.newaxis]
 
     return z_new
