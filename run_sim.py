@@ -30,16 +30,12 @@ _GEO_MODULES = {'lat': 'geometry_files.so_coupling_optics_TR_geometry', 'sat': '
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run FTS simulation for a single detector position.')
     parser.add_argument('--num-rays', type=int, default=500, help='Number of rays to use in the simulation (default: 500)')
-    parser.add_argument('--geometry', choices=['lat', 'sat', 'act'], default='lat',
-                        help='Geometry to use: "lat" for so_coupling_optics_TR_geometry (default), "sat" for SAT_TR_geometry, "act" for ACT FTS geometry')
+    parser.add_argument('--geometry', default=None,
+                        help='Geometry to use: preset key ("lat", "sat", "act") or a dotted module path '
+                             '(e.g. "geometry_files.so_lat_iris_test_geo"). Overrides local_config.geometry '
+                             'if set; defaults to "lat" if neither is specified.')
     args = parser.parse_args()
     num_rays = args.num_rays
-
-    # Set env var before importing fts_utils so workers inherit it and _default_geo is correct
-    os.environ['FTS_GEO_MODULE'] = _GEO_MODULES[args.geometry]
-    import fts_utils  # reads FTS_GEO_MODULE to select geometry
-
-    geo = importlib.import_module(_GEO_MODULES[args.geometry])
 
     # machine/run-specific parameters (beam file, detector position, scan
     # params, frequencies) live in local_config.py, which is gitignored —
@@ -51,6 +47,15 @@ if __name__ == '__main__':
             "local_config.py not found. Copy local_config.example.py to "
             "local_config.py and fill in your machine-specific paths/parameters."
         )
+
+    geometry_setting = args.geometry or getattr(cfg, 'geometry', 'lat')
+    geo_module_path = _GEO_MODULES.get(geometry_setting, geometry_setting)
+
+    # Set env var before importing fts_utils so workers inherit it and _default_geo is correct
+    os.environ['FTS_GEO_MODULE'] = geo_module_path
+    import fts_utils  # reads FTS_GEO_MODULE to select geometry
+
+    geo = importlib.import_module(geo_module_path)
 
     beam_data = np.loadtxt(cfg.beam_file)
     xpos, ypos, theta_bound = cfg.xpos, cfg.ypos, cfg.theta_bound

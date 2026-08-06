@@ -7,6 +7,14 @@ parameter for a local run never shows up as a change to tracked code.
 '''
 import numpy as np
 
+# --- geometry ---
+# Which optical geometry to use. Either a preset key ('lat', 'sat', 'act' —
+# same as the --geometry CLI choices) or a full dotted module path for a
+# one-off/experimental geometry file not in the preset list, e.g.
+# 'geometry_files.so_lat_iris_test_geo'.
+# Overridden by --geometry on the CLI if that flag is passed.
+geometry = 'act'
+
 # --- beam data ---
 # don't have teraflash beam profile so use feedhorn profile (approx. Gaussian) for now
 beam_file = '/path/to/instrument_model/instrument_hardware/simulated_beam/simulated_feedhorn_beams/MF/150_GHz_weighted.txt'
