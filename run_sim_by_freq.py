@@ -48,7 +48,7 @@ if __name__ == '__main__':
     FTS_throw, FTS_step = cfg.FTS_throw, cfg.FTS_step
     freqs = cfg.sweep_freqs
 
-    out_dir = f'sim_outputs/by_freq/{num_rays}r'
+    out_dir = os.path.join(cfg.output_path_by_freq, f'{num_rays}r')
     os.makedirs(out_dir, exist_ok=True)
 
     t0 = time.time()

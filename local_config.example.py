@@ -57,3 +57,11 @@ weights = None  # for monochromatic input, all rays have equal weight
 
 # --- frequency sweep (used by run_sim_by_freq.py) ---
 sweep_freqs = np.linspace(128e9, 168e9, 10)
+
+# --- output ---
+# directory run_sim.py saves its interferogram/ray_outputs files into
+output_path = 'sim_outputs/act'
+
+# base directory run_sim_by_freq.py saves into (a <num_rays>r/ subfolder is
+# created underneath it for each run)
+output_path_by_freq = 'sim_outputs/by_freq'
