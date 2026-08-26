@@ -94,7 +94,7 @@ central_mirror = rt.FlatMirror(diam=124, origin=(0,0,0), gx_local=(1,0,0), gy_lo
 # origin in local coords: -238.577, 0, 368.267
 iris = rt.FocalPlane(origin=(310.981, 309.566, 0), diam=76.2, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0))
 
-'''Evaluation plane for plotting the diffraction pattern at the iris (rather than source) plane'''
+'''Evaluation plane for Kirchoff-propagating to the source'''
 eval_plane = rt.FocalPlane(origin = (251.836, 35.884, 0.0), diam = 100, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0))
 
 '''Full system with allowed paths through FTS'''
@@ -154,55 +154,12 @@ optical_system = {
         "ell_7": {"element": [ell_7], "next": {"default": "wg_4"}},
         "ell_8": {"element": [ell_8], "next": {"default": "wg_4"}},
         "wg_4": {"element": wg_4, "next": {}},
-        "eval_plane": {"element": [iris], "next": {"default": None}},
-    },
-}
-
-# add in source detector object
-# note: changed to 120mm diameter to match the number in Tommy's paper
-source = diff.Detector(origin=(359.266, 533.008, 0), diam=120, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0), resolution = 1)
-
-# iris as a detector object
-iris_detector = diff.Detector(origin=(310.981, 309.566, 0), diam=76.2, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0), resolution=1)
-
-# optical system for producing source maps at the iris plane
-optical_system_to_eval_plane = {
-    "entry": "pre_fts",
-    "allowed_branch_sequences": allowed_branch_sequences,
-    "nodes": {
-        # Optics tube + coupling optics only
-        "pre_fts": {
-            "element": OT+[M1, M2, bs],
-            "next": {"default": "wg_1"},
-        },
-
-        # Wire grid optical node
-        "wg_1": {
-            "element": wg_1,
-            "next": {}, # routing comes from allowed_branch_sequences
-        },
-
-        "ell_1": {
-            "element": [ell_1],
-            "next": {"default": "wg_2"},
-        },
-
-        "ell_2": {
-            "element": [ell_2],
-            "next": {"default": "wg_2"},
-        },
-
-        'wg_2': {
-            "element": wg_2,
-            "next": {},
-        },
-
-        "ell_3": {"element": [ell_3, central_mirror, ell_5], "next": {"default": "wg_3"}}, 
-        "ell_4": {"element": [ell_4, central_mirror, ell_6], "next": {"default": "wg_3"}}, 
-        "wg_3": {"element": wg_3, "next": {}},
-        "ell_7": {"element": [ell_7], "next": {"default": "wg_4"}},
-        "ell_8": {"element": [ell_8], "next": {"default": "wg_4"}},
-        "wg_4": {"element": wg_4, "next": {}},
         "eval_plane": {"element": [eval_plane], "next": {"default": None}},
     },
 }
+
+# source detector object
+source = diff.Detector(origin=(359.266, 533.008, 0), diam=120, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0), resolution = 1)
+
+# iris as a detector object (for beam-mapping at the iris plane)
+iris_detector = diff.Detector(origin=(310.981, 309.566, 0), diam=76.2, gx_local=(0.97743625, 0, -0.21123063), gy_local=(-0.21123063, 0, -0.97743625), gz_local=(0, 1, 0), resolution=1)
