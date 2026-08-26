@@ -74,16 +74,17 @@ if __name__ == '__main__':
     # generate interferogram (most time-intensive)
     interferogram, dm_positions, source_maps = fts_utils.generate_interferogram(ray_outputs, geo.source, freqs, FTS_throw, FTS_step, return_maps=True, weights=weights) # type: ignore
 
-    # save outputs (set local_config.output_path to change where files get saved)
+    # save outputs (set local_config.output_path/output_filename to change where/what files get saved)
     os.makedirs(cfg.output_path, exist_ok=True)
-    output_file = os.path.join(cfg.output_path, f'150GHz_{num_rays}r.npz')
+    output_file = os.path.join(cfg.output_path, cfg.output_filename.format(num_rays=num_rays, **vars(cfg)))
 
     np.savez(output_file, interferogram=interferogram, dm_positions=dm_positions, source_maps=source_maps,
              input_freqs=freqs) # add input_weights=weights if weights is not None, ie if running on a passband input
 
     # save ray_outputs so generate_interferogram can be re-run at different frequencies
-    with open(os.path.join(cfg.output_path, f'ray_outputs_{num_rays}r.pkl'), 'wb') as f:
-        pickle.dump(ray_outputs, f)
+    if cfg.save_ray_outputs:
+        with open(os.path.join(cfg.output_path, f'ray_outputs_{num_rays}r.pkl'), 'wb') as f:
+            pickle.dump(ray_outputs, f)
 
     t1 = time.time()
     print(f"Done! Total simulation time: {t1 - t0:.2f} seconds")

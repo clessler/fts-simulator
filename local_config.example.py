@@ -2,50 +2,46 @@
 Template for local, machine/run-specific parameters used by run_sim.py.
 
 Copy this file to local_config.py (gitignored, not tracked) and fill in
-your real paths/values. That way tweaking a beam file path or a scan
-parameter for a local run never shows up as a change to tracked code.
+your real paths/values for every simulation run.
 '''
 import numpy as np
 
-# --- geometry ---
-# Which optical geometry to use. Either a preset key ('lat', 'sat', 'act' —
+''' --- geometry --- '''
+# The optical geometry to use for the simulation run. Either a preset key ('lat', 'sat', 'act' —
 # same as the --geometry CLI choices) or a full dotted module path for a
-# one-off/experimental geometry file not in the preset list, e.g.
+#  geometry file not in the preset list, e.g.
 # 'geometry_files.so_lat_iris_test_geo'.
 # Overridden by --geometry on the CLI if that flag is passed.
-geometry = 'act'
+geometry = 'geometry_files.your_geometry_file'
 
-# --- beam data ---
-# don't have teraflash beam profile so use feedhorn profile (approx. Gaussian) for now
-beam_file = '/path/to/instrument_model/instrument_hardware/simulated_beam/simulated_feedhorn_beams/MF/150_GHz_weighted.txt'
+''' --- beam data --- '''
+# add in your beam intensity profile here
+beam_file = '/path/to/instrument_model/simulated_beam.txt'
 
-# --- detector position & beam angle bounds ---
+''' --- detector position & beam angle bounds --- '''
+# fill in the x/y position from which to launch rays and the cone-angle to launch them into
 # lat params
-# xpos, ypos = -53.947736, 1.34448473
-# theta_bound = 15  # degrees, bounds for ray angles relative to the optical axis
+xpos, ypos = -53.947736, 1.34448473
+theta_bound = 15  # degrees, bounds for ray angles relative to the optical axis
 
 # sat params
 # xpos, ypos = 0, 0
-# theta_bound = 25  # degrees, bounds for ray angles relative to the optical axis
+# theta_bound = 25
 
 # act params
-xpos, ypos = 0, 0
-theta_bound = 12  # degrees
+# xpos, ypos = 0, 0
+# theta_bound = 12
 
-# --- FTS scan parameters ---
-# sim params for MF scans
-# FTS_throw = 20  # mm, total (positive) mirror throw
-# FTS_step = 0.1  # mm, step size for mirror position
-
-# realistic MF scan params
-FTS_throw = 37.5
+''' --- FTS scan parameters --- '''
+# add the parameters of the FTS scan you want to simulate
+FTS_throw = 37.5 # mm (this means the FTS scans over +/- 37.5mm)
 FTS_step = 0.15
 
-# --- input frequency or array of frequencies ---
+''' --- input frequency or array of frequencies --- '''
 freqs = np.array([150e9])  # monochromatic 150 GHz
 weights = None  # for monochromatic input, all rays have equal weight
 
-# broadband: load MF2 passband and use non-zero entries as weighted input
+# sample for simulating a broadband detector: load in passband and use non-zero entries as weighted input
 # passband_file = '/path/to/bolocalc-so-model/V4r0/V4r0_Goal/SAT/bands/detectors/MF_2.txt'
 # passband_data = np.loadtxt(passband_file)
 # passband_freqs = passband_data[:, 0] * 1e9  # GHz -> Hz
@@ -55,13 +51,27 @@ weights = None  # for monochromatic input, all rays have equal weight
 # freqs = passband_freqs[mask][::subsample_fac]
 # weights = passband_weights[mask][::subsample_fac]
 
-# --- frequency sweep (used by run_sim_by_freq.py) ---
+''' --- frequency sweep (used by run_sim_by_freq.py) --- '''
+# if running run_sim_by_freq, add the evaluation frequencies you want to use here
 sweep_freqs = np.linspace(128e9, 168e9, 10)
 
-# --- output ---
+''' --- output --- '''
 # directory run_sim.py saves its interferogram/ray_outputs files into
-output_path = 'sim_outputs/act'
+output_path = 'sim_outputs/your_geometry'
 
-# base directory run_sim_by_freq.py saves into (a <num_rays>r/ subfolder is
-# created underneath it for each run)
-output_path_by_freq = 'sim_outputs/by_freq'
+# filename run_sim.py uses for its interferogram outputs. {num_rays} is filled in at run time.
+output_filename = '150GHz_{num_rays}r.npz'
+
+# whether run_sim.py also saves ray_outputs (allows
+# generate_interferogram be re-run at different frequencies without
+# re-tracing rays) - these files can be large, so turn off if not needed
+save_ray_outputs = True
+
+# directory run_sim_by_freq.py saves each frequency's interferogram output into
+output_path_by_freq = 'sim_outputs/by_freq/{num_rays}r'
+
+# filename run_sim_by_freq.py uses for each frequency's interferogram output ({freq_ghz} filled in at run time)
+output_filename_by_freq = '{freq_ghz:.4g}GHz.npz'
+
+# whether run_sim_by_freq.py also saves ray outputs (as ray_outputs_<num_rays>r.pkl)
+save_ray_outputs_by_freq = True

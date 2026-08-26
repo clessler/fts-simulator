@@ -2,7 +2,7 @@
 Runs the FTS simulation across a sweep of frequencies (local_config.sweep_freqs).
 Ray tracing (scan_fts) is performed once; interferogram generation is repeated
 per frequency to avoid redundant computation. Outputs saved to
-sim_outputs/by_freq/<num_rays>r/<freq_GHz>GHz.npz.
+local_config.output_path_by_freq/<freq_GHz>GHz.npz.
 '''
 # imports (geometry-independent)
 import time
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     FTS_throw, FTS_step = cfg.FTS_throw, cfg.FTS_step
     freqs = cfg.sweep_freqs
 
-    out_dir = os.path.join(cfg.output_path_by_freq, f'{num_rays}r')
+    out_dir = cfg.output_path_by_freq.format(num_rays=num_rays, **vars(cfg))
     os.makedirs(out_dir, exist_ok=True)
 
     t0 = time.time()
@@ -61,10 +61,11 @@ if __name__ == '__main__':
     print("Starting ray trace (scan_fts)...")
     ray_outputs = fts_utils.scan_fts(starting_rays, FTS_throw, FTS_step, debug=True)
 
-    ray_outputs_path = os.path.join(out_dir, f'ray_outputs_{num_rays}r.pkl')
-    with open(ray_outputs_path, 'wb') as f:
-        pickle.dump(ray_outputs, f)
-    print(f"Ray outputs saved to {ray_outputs_path}")
+    if cfg.save_ray_outputs_by_freq:
+        ray_outputs_path = os.path.join(out_dir, f'ray_outputs_{num_rays}r.pkl')
+        with open(ray_outputs_path, 'wb') as f:
+            pickle.dump(ray_outputs, f)
+        print(f"Ray outputs saved to {ray_outputs_path}")
 
     for freq in freqs:
         freq_ghz = freq / 1e9
@@ -72,7 +73,7 @@ if __name__ == '__main__':
         interferogram, dm_positions = fts_utils.generate_interferogram( # type: ignore
             ray_outputs, geo.source, np.array([freq]), FTS_throw, FTS_step, return_maps=False)
 
-        out_file = os.path.join(out_dir, f'{freq_ghz:.4g}GHz.npz')
+        out_file = os.path.join(out_dir, cfg.output_filename_by_freq.format(freq_ghz=freq_ghz, num_rays=num_rays, **vars(cfg)))
         np.savez(out_file, interferogram=interferogram, dm_positions=dm_positions, freq_hz=freq)
         print(f"  Saved to {out_file}")
 
