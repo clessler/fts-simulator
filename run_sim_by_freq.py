@@ -48,6 +48,9 @@ if __name__ == '__main__':
     FTS_throw, FTS_step = cfg.FTS_throw, cfg.FTS_step
     freqs = cfg.sweep_freqs
 
+    detector_names = getattr(cfg, 'detector_chain', ['source'])
+    detectors = [getattr(geo, name) for name in detector_names]
+
     out_dir = cfg.output_path_by_freq.format(num_rays=num_rays, **vars(cfg))
     os.makedirs(out_dir, exist_ok=True)
 
@@ -71,7 +74,7 @@ if __name__ == '__main__':
         freq_ghz = freq / 1e9
         print(f"\nGenerating interferogram for {freq_ghz:.4g} GHz...")
         interferogram, dm_positions = fts_utils.generate_interferogram( # type: ignore
-            ray_outputs, geo.source, np.array([freq]), FTS_throw, FTS_step, return_maps=False)
+            ray_outputs, detectors, np.array([freq]), FTS_throw, FTS_step, return_maps=False)
 
         out_file = os.path.join(out_dir, cfg.output_filename_by_freq.format(freq_ghz=freq_ghz, num_rays=num_rays, **vars(cfg)))
         np.savez(out_file, interferogram=interferogram, dm_positions=dm_positions, freq_hz=freq)
