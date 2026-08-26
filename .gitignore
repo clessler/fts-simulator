@@ -2,3 +2,5 @@ sim_outputs/
 *.ipynb
 Shreya_band_attrs_hwp_run1_150GHz_260420.pkl
 local_config.py
+.claude/
+MEMORY.md
