@@ -194,14 +194,10 @@ def generate_complex_field_maps(final_rays, detector, freqs, fts_throw, fts_step
     Ey = np.stack([e if e is not None else np.zeros(field_shape, dtype=complex) for _, e in results])
     return Ex, Ey, dm_positions, x_local, y_local
 
-def _propagate_field_chain(Ex, Ey, detector_chain, freqs, weights=None, pad_factor=2):
-    '''Serial stage: propagate a (N_pos, N_freq, Ny, Nx) complex field -- already at
+def _propagate_field_chain(Ex, Ey, detector_chain, freqs, weights=None, pad_factor=2, max_batch_bytes=2e9):
+    '''propagate a (N_pos, N_freq, Ny, Nx) complex field -- already at
     detector_chain[0]'s plane -- through the rest of detector_chain via batched
-    angular-spectrum hops (all DM positions at once, no Pool needed since the FFT is cheap).
-    Each intermediate detector's own circular aperture is applied before propagating further,
-    so it acts as a real stop rather than a pass-through plane. Returns a list of weighted
-    intensity maps, one per detector in detector_chain (index 0 = entry plane, index -1 =
-    final plane).'''
+    angular-spectrum hops.'''
     w = np.asarray(weights) if weights is not None else np.ones(len(freqs))
 
     def _weighted_map(Ex, Ey, det):
@@ -209,9 +205,28 @@ def _propagate_field_chain(Ex, Ey, detector_chain, freqs, weights=None, pad_fact
         m[..., det.aperture_mask()] = np.nan
         return m
 
+    n_pos, n_freq = Ex.shape[:2]
+    n_hops = len(detector_chain) - 1
     stage_maps = [_weighted_map(Ex, Ey, detector_chain[0])]
-    for prev, cur in zip(detector_chain[:-1], detector_chain[1:]):
-        Ex, Ey, _, _ = cur.intensity_map_from_field(Ex, Ey, prev, freqs, weights=None, pad_factor=pad_factor, return_field=True)
+    for hop_i, (prev, cur) in enumerate(zip(detector_chain[:-1], detector_chain[1:])):
+        x_out, y_out = cur.grid_axes()
+        Ny_pad = int(np.ceil(max(Ex.shape[-2], len(y_out)) * pad_factor))
+        Nx_pad = int(np.ceil(max(Ex.shape[-1], len(x_out)) * pad_factor))
+        bytes_per_pos = n_freq * Ny_pad * Nx_pad * 16 * 2  # complex128, Ex + Ey
+        chunk_size = max(1, int(max_batch_bytes // bytes_per_pos))
+        n_chunks = -(-n_pos // chunk_size)  # ceil division
+
+        Ex_chunks, Ey_chunks = [], []
+        starts = tqdm(range(0, n_pos, chunk_size), total=n_chunks,
+                       desc=f"Propagating through iris {hop_i + 1}/{n_hops}",
+                       file=sys.stderr, dynamic_ncols=True)
+        for start in starts:
+            sl = slice(start, start + chunk_size)
+            Ex_c, Ey_c, _, _ = cur.intensity_map_from_field(Ex[sl], Ey[sl], prev, freqs, weights=None, pad_factor=pad_factor, return_field=True)
+            Ex_chunks.append(Ex_c)
+            Ey_chunks.append(Ey_c)
+        Ex, Ey = np.concatenate(Ex_chunks), np.concatenate(Ey_chunks)
+
         if cur is not detector_chain[-1]:  # intermediate physical stop: clip before propagating further
             mask = cur.aperture_mask()
             Ex[..., mask] = 0.0
@@ -219,10 +234,10 @@ def _propagate_field_chain(Ex, Ey, detector_chain, freqs, weights=None, pad_fact
         stage_maps.append(_weighted_map(Ex, Ey, cur))
     return stage_maps
 
-def generate_interferogram(final_rays, detector, freqs, fts_throw, fts_step, n_workers=None, return_maps=False, return_all_stage_maps=False, ray_chunk_size=32, weights=None, pad_factor=2):
+def generate_interferogram(final_rays, detector, freqs, fts_throw, fts_step, n_workers=None, return_maps=False, return_all_stage_maps=False, ray_chunk_size=32, weights=None, pad_factor=2, max_batch_bytes=2e9):
     chain = tuple(detector) if isinstance(detector, (list, tuple)) else (detector,)
     Ex, Ey, dm_positions, x_local, y_local = generate_complex_field_maps(final_rays, chain[0], freqs, fts_throw, fts_step, n_workers=n_workers, ray_chunk_size=ray_chunk_size)
-    stage_maps = _propagate_field_chain(Ex, Ey, chain, freqs, weights=weights, pad_factor=pad_factor)
+    stage_maps = _propagate_field_chain(Ex, Ey, chain, freqs, weights=weights, pad_factor=pad_factor, max_batch_bytes=max_batch_bytes)
     power_values = np.nansum(stage_maps[-1], axis=(-2, -1))
     if return_all_stage_maps:
         return power_values, dm_positions, stage_maps       # list, one array per detector_chain entry
@@ -233,7 +248,7 @@ def generate_interferogram(final_rays, detector, freqs, fts_throw, fts_step, n_w
 '''Utilities for generating spectra from interferograms.'''
 
 # add in source-dependence through exponent alpha
-def generate_spectrum(interferogram, fts_step_size, normalize=True, normalize_cutoff=None, return_cutoff = False, include_source=True, source_alpha=2):
+def generate_spectrum(interferogram, fts_step_size, normalize=True, normalize_cutoff=None, return_cutoff = False, include_source=False, source_alpha=2):
     # Fourier transform interferogram
     windowed_interferogram = np.hanning(int(np.shape(interferogram)[
         0])) * interferogram

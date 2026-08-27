@@ -1,6 +1,7 @@
 import ray_tracing as rt
 import numpy as np
 import plotly.graph_objects as go
+import warnings
 from dataclasses import dataclass
 from tqdm import tqdm
 
@@ -190,6 +191,16 @@ class Detector(rt._PoseMixin):
 		assert np.allclose(dy_steps, dy_steps[0]), "y_local must be uniformly spaced"
 		dx, dy = dx_steps[0], dy_steps[0]
 		assert np.isclose(dx, dy), "_propagate_angular_spectrum requires square pixels (dx == dy)"
+
+		min_wavelength = np.min(np.asarray(wavelength, dtype=float))
+		if dx > min_wavelength / 2:
+			warnings.warn(
+				f"Detector resolution ({dx:.4g} mm) is coarser than the Nyquist floor for "
+				f"propagating spatial frequencies at the shortest wavelength in this call "
+				f"({min_wavelength:.4g} mm); dx <= wavelength/2 is needed to avoid aliasing "
+				f"propagating components in the angular-spectrum transfer function.",
+				stacklevel=2,
+			)
 
 		Ny_out, Nx_out = out_shape if out_shape is not None else (Ny, Nx)
 
