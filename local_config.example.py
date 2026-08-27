@@ -14,6 +14,25 @@ import numpy as np
 # Overridden by --geometry on the CLI if that flag is passed.
 geometry = 'geometry_files.your_geometry_file'
 
+# Ordered list of Detector attribute names on the geometry module, defining the
+# propagation chain from the ray-traced eval_plane through zero or more
+# intermediate irises/aperture stops to the final source plane. Each name is
+# resolved via getattr(geo, name); all listed Detectors must share the same
+# `resolution`. Defaults to ['source'] (no iris) if unset.
+# detector_chain = ['source']
+#
+# One iris:
+# detector_chain = ['iris_detector', 'source']
+#
+# Multiple irises (geometry module must define each Detector object):
+# detector_chain = ['iris_detector_1', 'iris_detector_2', 'source']
+
+# If True, save a separate source map for every detector in detector_chain
+# (keyed 'source_maps_<name>' in the output .npz) instead of just the final
+# one. Useful for comparing the field before/after each iris. Defaults to
+# False (single 'source_maps' key, matching today's output format).
+# save_stage_maps = False
+
 ''' --- beam data --- '''
 # add in your beam intensity profile here
 beam_file = '/path/to/instrument_model/simulated_beam.txt'

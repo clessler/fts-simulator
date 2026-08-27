@@ -62,6 +62,10 @@ if __name__ == '__main__':
     FTS_throw, FTS_step = cfg.FTS_throw, cfg.FTS_step
     freqs, weights = cfg.freqs, cfg.weights
 
+    detector_names = getattr(cfg, 'detector_chain', ['source'])
+    detectors = [getattr(geo, name) for name in detector_names]
+    save_stage_maps = getattr(cfg, 'save_stage_maps', False)
+
     t0 = time.time()
 
     # generate starting rays
@@ -72,14 +76,21 @@ if __name__ == '__main__':
     ray_outputs = fts_utils.scan_fts(starting_rays, FTS_throw, FTS_step, debug=True)
 
     # generate interferogram (most time-intensive)
-    interferogram, dm_positions, source_maps = fts_utils.generate_interferogram(ray_outputs, geo.source, freqs, FTS_throw, FTS_step, return_maps=True, weights=weights) # type: ignore
+    interferogram, dm_positions, stage_maps = fts_utils.generate_interferogram(  # type: ignore
+        ray_outputs, detectors, freqs, FTS_throw, FTS_step,
+        return_all_stage_maps=save_stage_maps, return_maps=not save_stage_maps, weights=weights)
 
     # save outputs (set local_config.output_path/output_filename to change where/what files get saved)
     os.makedirs(cfg.output_path, exist_ok=True)
     output_file = os.path.join(cfg.output_path, cfg.output_filename.format(num_rays=num_rays, **vars(cfg)))
 
-    np.savez(output_file, interferogram=interferogram, dm_positions=dm_positions, source_maps=source_maps,
-             input_freqs=freqs) # add input_weights=weights if weights is not None, ie if running on a passband input
+    save_kwargs = dict(interferogram=interferogram, dm_positions=dm_positions, input_freqs=freqs)
+    # add input_weights=weights if weights is not None, ie if running on a passband input
+    if save_stage_maps:
+        save_kwargs.update({f'source_maps_{name}': m for name, m in zip(detector_names, stage_maps)})
+    else:
+        save_kwargs['source_maps'] = stage_maps
+    np.savez(output_file, **save_kwargs)
 
     # save ray_outputs so generate_interferogram can be re-run at different frequencies
     if cfg.save_ray_outputs:
